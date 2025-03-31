@@ -1,0 +1,298 @@
+esphome:
+  name: esp-c-screen1
+  friendly_name: esp-c-screen1
+  includes: 
+    - text_utils.h
+
+# https://www.aliexpress.com/item/1005004617322170.html?spm=a2g0o.order_list.order_list_main.5.2f231802n6omPe
+# ESP32-S3 N16R8
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  flash_size: 16MB  
+  framework:
+    type: esp-idf
+
+# https://www.espressif.com/sites/default/files/documentation/esp32-s3-wroom-1_wroom-1u_datasheet_en.pdf
+# ESP32-S3-WROOM-1-N16R8
+# Flash: 16 MB (Quad SPI)
+# PSRAM: 8 MB (Octal SPI)
+psram:
+  mode: octal
+  speed: 80MHz
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "="
+
+ota:
+  - platform: esphome
+    password: "="
+
+wifi:
+  networks:
+    - ssid: !secret wifi_ssid
+      password: !secret wifi_password
+    - ssid: !secret wifi_2_ssid
+      password: !secret wifi_2_password
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Esp-C-Screen1 Fallback Hotspot"
+    password: "="
+
+captive_portal:
+
+
+# Pins for TFT screen
+# ESP32 <-> ILI9488
+# GPIO13 miso_pin - SDO (MISO)
+# GPIO05 light    - LED
+# GPIO12 lck_pin  - SCK
+# GPIO11 mosi_pin - SDI (MOSI)
+# GPIO06 dc_pin   - DC/RS
+# GPIO07 reset_pin- RESET
+# GPIO10 cs_pin   - CS
+# GND             - GND
+# 3V              - 3V
+spi:
+  clk_pin: GPIO12   #SCK
+  mosi_pin: GPIO11  #SDI (MOSI)
+  miso_pin: GPIO13  #SDO (MISO)
+
+font:
+  - file: "5x8_lcd_hd44780u_a02.ttf"
+    id: font_small
+    size: 24
+  - file: "super_mario_bros2.ttf"
+    id: font_large
+    size: 45
+
+#Temperature
+  - file: 'Arial-Black.ttf'
+    id: font_24
+    size: 70
+#Time
+  - file: 'BebasNeue-Regular.ttf'
+    id: font_bebasneue
+    size: 48
+
+#Forecast icons
+  - file: 'materialdesignicons-webfont.ttf'
+    id: weather_font
+    size: 180 #50
+    glyphs:
+      - "\U000F0590" # weather-cloudy
+      - "\U000F0F2F" # weather-cloudy-alert
+      - "\U000F0E6E" # weather-cloudy-arrow-right
+      - "\U000F0591" # weather-fog
+      - "\U000F0592" # weather-hail
+      - "\U000F0F30" # weather-hazy
+      - "\U000F0898" # weather-hurricane
+      - "\U000F0593" # weather-lightning
+      - "\U000F067E" # weather-lightning-rainy
+      - "\U000F0594" # weather-night
+      - "\U000F0F31" # weather-night-partly-cloudy
+      - "\U000F0595" # weather-partly-cloudy
+      - "\U000F0F32" # weather-partly-lightning
+      - "\U000F0F33" # weather-partly-rainy
+      - "\U000F0F34" # weather-partly-snowy
+      - "\U000F0F35" # weather-partly-snowy-rainy
+      - "\U000F0596" # weather-pouring
+      - "\U000F0597" # weather-rainy
+      - "\U000F0598" # weather-snowy
+      - "\U000F0F36" # weather-snowy-heavy
+      - "\U000F067F" # weather-snowy-rainy
+      - "\U000F0599" # weather-sunny
+      - "\U000F0F37" # weather-sunny-alert
+#      - "\U000F14E4" # weather-sunny-off
+      - "\U000F059A" # weather-sunset
+      - "\U000F059B" # weather-sunset-down
+      - "\U000F059C" # weather-sunset-up
+      - "\U000F0F38" # weather-tornado
+      - "\U000F059D" # weather-windy
+      - "\U000F059E" # weather-windy-variant
+
+image:
+  - file: "./weather_images/sunny.png"
+    id: imgWeatherSunny
+    type: RGB
+    transparency: alpha_channel
+  - file: "./weather_images/clear-night.png"
+    id: imgWeatherClearNight
+    type: RGB
+    transparency: alpha_channel
+  - file: "./weather_images/cloudy.png"
+    id: imgWeatherCloudy
+    type: RGB
+    transparency: alpha_channel
+  - file: "./weather_images/partly-cloudy.png"
+    id: imgWeatherPartlyCloudy
+    type: RGB
+    transparency: alpha_channel
+  - file: "./weather_images/partly-cloudy-night.png"
+    id: imgWeatherPartlyCloudyNight
+    type: RGB
+    transparency: alpha_channel
+
+#status_led:
+#  pin:
+#    number: GPIO2
+#    inverted: true
+
+time:
+  - platform: sntp
+    id: sntp_time
+
+binary_sensor:
+  # PIR motion sensor:
+  # 3V, GND, GPIO18
+  - platform: gpio
+    pin: GPIO18
+    id: pir_sensor
+    name: "PIR Sensor"
+    device_class: motion
+    on_press:
+      # Turn on backlight
+      then:
+        - light.turn_on: 
+            id: back_light
+  - platform: template
+    id: pir_sensor_timeout
+    lambda: 'return id(pir_sensor).state;'
+    filters:
+      - delayed_off: 1min
+    on_release:
+      # Turn off backlight
+      then:
+        - light.turn_off: 
+            id: back_light
+
+sensor:
+  # Outside temperature – imported from Home Assistant
+  - platform: homeassistant
+    name: Outside temperature2
+    id: outside_temperature2
+    entity_id: sensor.outside_temperature
+  
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    update_interval: 60s
+
+  - platform: homeassistant
+    entity_id: sensor.local_weather_forecast_daily
+    attribute: weather_forecast_temperature_max
+    id: weather_forecast_temperature_max
+  - platform: homeassistant
+    entity_id: sensor.local_weather_forecast_daily
+    attribute: weather_forecast_temperature_min
+    id: weather_forecast_temperature_min
+
+  - platform: homeassistant
+    entity_id: sensor.waqi_air_quality_index
+    id: waqi
+
+text_sensor:
+  - platform: homeassistant
+    entity_id: sensor.local_weather_forecast_daily
+    attribute: weather_forecast_condition
+    id: weather_forecast_condition
+  # Import 5 day forecast
+  - platform: homeassistant
+    id: forecast_5
+    entity_id: weather.casa
+    attribute: forecast
+    internal: yes
+
+# Define a PWM output on the ESP32
+output:
+  - platform: ledc
+    pin: GPIO5
+    id: gpio_5_backlight_pwm
+
+# Define a monochromatic, dimmable light for the backlight
+light:
+  - platform: monochromatic
+    output: gpio_5_backlight_pwm
+    name: "Display Backlight"
+    id: back_light
+    restore_mode: ALWAYS_ON
+
+display:
+  - platform: ili9xxx
+    model: ILI9488_A #ILI9488 320x480 MSP3521
+    cs_pin: GPIO10  #CS
+    dc_pin: GPIO6   #DC/RS
+#    led_pin: GPIO5 # <- was moved to the external light sensor on GPIO5
+    reset_pin: GPIO7  #RESET
+    invert_colors: false
+    rotation: 270°
+#    color_palette: 8BIT # <- workaround for ILI9341 without psram, but don't need it because this model is N16R8
+    lambda: |-
+      //Map weather fonts//
+      std::map<std::string, const char *> fonDict;
+      fonDict["clear-night"] = "\U000F0594";
+      fonDict["night-partly-cloudy"] = "\U000F0F31";
+      fonDict["cloudy"] = "\U000F0590";
+      fonDict["fog"] = "\U000F0591";
+      fonDict["hail"] = "\U000F0592";
+      fonDict["lightning"] = "\U000F0593";
+      fonDict["lightning-rainy"] = "\U000F067E";
+      fonDict["partlycloudy"] = "\U000F0595";
+      fonDict["pouring"] = "\U000F0596";
+      fonDict["rainy"] = "\U000F0597";
+      fonDict["snowy"] = "\U000F0598";
+      fonDict["snowy-rainy"] = "\U000F067F";
+      fonDict["sunny"] = "\U000F0599";
+      fonDict["windy"] = "\U000F059D";
+      fonDict["windy-variant"] = "\U000F059E";
+      fonDict["exceptional"] = "";
+      //
+      //// Turn the whole display on
+      //auto c_white = Color(255, 255, 255);
+      //it.fill(c_white);
+      //it.image(0, 0, id(imgWeatherSunny));
+      //
+      // Alert on poor Air Quality
+      if (id(waqi).state > 90)
+      {
+        auto c_red = Color(255, 0, 0);
+        it.filled_rectangle(0, 0, 320, 32, c_red);
+      }
+      int s_size = GetTextWidth(&it, id(font_small), "AQI %.0f", id(waqi).state);
+      it.printf(319 - s_size, 0, id(font_small), TextAlign::TOP_LEFT,"AQI %.0f", id(waqi).state);
+      //
+      auto hour = id(sntp_time).now().hour;
+      auto weather = id(weather_forecast_condition).state;
+      if (hour <= 5 || hour >= 21) {
+        if (weather == "sunny") weather = "clear-night";
+        if (weather == "partlycloudy") weather = "night-partly-cloudy";
+      }
+      //World air quality index
+      it.printf(320*1/4/3, 100, id(font_24), "%.0f°", TextAlign::TOP_CENTER, id(outside_temperature2).state);
+      // Outside temperature
+      it.printf(320*1/4/3, 100, id(font_24), "%.0f°", TextAlign::TOP_CENTER, id(outside_temperature2).state);
+      //
+      // Icon weather condition
+      if (weather == "sunny") it.image(93, 70, id(imgWeatherSunny));
+      else if (weather == "clear-night") it.image(93, 70, id(imgWeatherClearNight));
+      else if (weather == "cloudy") it.image(93, 70, id(imgWeatherCloudy));
+      else if (weather == "partlycloudy") it.image(93, 70, id(imgWeatherPartlyCloudy));
+      else if (weather == "night-partly-cloudy") it.image(93, 70, id(imgWeatherPartlyCloudyNight));
+      else 
+      {
+          if (fonDict.count(weather) > 0) {
+            it.printf(320-180/2, 100, id(weather_font), TextAlign::TOP_CENTER, "%s", fonDict[weather]);
+          }
+      }
+      // Temperature
+      it.printf(320*2/3+20, 290, id(font_small), TextAlign::TOP_CENTER, "%.0f° - %.0f°", id(weather_forecast_temperature_min).state, id(weather_forecast_temperature_max).state);
+      it.printf(320*2/3, 70, id(font_small), TextAlign::TOP_CENTER, "%s", weather.c_str());
+      // Current time
+      it.strftime((320 / 2), 380, id(font_bebasneue), Color::WHITE, TextAlign::CENTER, "%Y-%m-%d", id(sntp_time).now());
+      it.strftime((320 / 2), 432, id(font_bebasneue), Color::WHITE, TextAlign::CENTER, "%H:%M:%S", id(sntp_time).now());
+
+
