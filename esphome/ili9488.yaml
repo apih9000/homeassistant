@@ -46,7 +46,6 @@ wifi:
 
 captive_portal:
 
-
 # Pins for TFT screen
 # ESP32 <-> ILI9488
 # GPIO13 miso_pin - SDO (MISO)
@@ -70,7 +69,6 @@ font:
   - file: "super_mario_bros2.ttf"
     id: font_large
     size: 45
-
 #Temperature
   - file: 'Arial-Black.ttf'
     id: font_24
@@ -79,7 +77,6 @@ font:
   - file: 'BebasNeue-Regular.ttf'
     id: font_bebasneue
     size: 48
-
 #Forecast icons
   - file: 'materialdesignicons-webfont.ttf'
     id: weather_font
@@ -137,6 +134,14 @@ image:
     id: imgWeatherPartlyCloudyNight
     type: RGB
     transparency: alpha_channel
+  - file: "./weather_images/rainy.png"
+    id: imgWeatherRain
+    type: RGB
+    transparency: alpha_channel
+  - file: "./weather_images/fog.png"
+    id: imgWeatherFog
+    type: RGB
+    transparency: alpha_channel
 
 #status_led:
 #  pin:
@@ -172,7 +177,7 @@ binary_sensor:
             id: back_light
 
 sensor:
-  # Outside temperature – imported from Home Assistant
+  # Outside temperature – imported from Home Assistant
   - platform: homeassistant
     name: Outside temperature2
     id: outside_temperature2
@@ -230,7 +235,7 @@ display:
     reset_pin: GPIO7  #RESET
     invert_colors: false
     rotation: 270°
-#    color_palette: 8BIT # <- workaround for ILI9341 without psram, but don't need it because this model is N16R8
+#    color_palette: 8BIT # <- workaround for ILI9341 without psram, but don't need it because my model is N16R8
     lambda: |-
       //Map weather fonts//
       std::map<std::string, const char *> fonDict;
@@ -249,50 +254,55 @@ display:
       fonDict["sunny"] = "\U000F0599";
       fonDict["windy"] = "\U000F059D";
       fonDict["windy-variant"] = "\U000F059E";
-      fonDict["exceptional"] = "";
+      fonDict["exceptional"] = "?";
       //
-      //// Turn the whole display on
+      //// TEST: Turn the whole display on
       //auto c_white = Color(255, 255, 255);
       //it.fill(c_white);
       //it.image(0, 0, id(imgWeatherSunny));
       //
+      // World air quality index from external API
       // Alert on poor Air Quality
-      if (id(waqi).state > 90)
+      if (id(waqi).state > 70)
       {
-        auto c_red = Color(255, 0, 0);
-        it.filled_rectangle(0, 0, 320, 32, c_red);
+        auto color_air_background = Color(135, 62, 35); // Brown color
+        if (id(waqi).state > 90)
+          color_air_background = Color(255, 0, 0);      // Red color
+
+        it.filled_rectangle(0, 0, 320, 32, color_air_background);
       }
       int s_size = GetTextWidth(&it, id(font_small), "AQI %.0f", id(waqi).state);
       it.printf(319 - s_size, 0, id(font_small), TextAlign::TOP_LEFT,"AQI %.0f", id(waqi).state);
       //
+      // Outside temperature now from a sensor outside
+      it.printf(320*1/4/3, 100, id(font_24), "%.0f°", TextAlign::TOP_CENTER, id(outside_temperature2).state);
+      //
+      // Weather today's forecast condition image 
       auto hour = id(sntp_time).now().hour;
       auto weather = id(weather_forecast_condition).state;
       if (hour <= 5 || hour >= 21) {
         if (weather == "sunny") weather = "clear-night";
         if (weather == "partlycloudy") weather = "night-partly-cloudy";
       }
-      //World air quality index
-      it.printf(320*1/4/3, 100, id(font_24), "%.0f°", TextAlign::TOP_CENTER, id(outside_temperature2).state);
-      // Outside temperature
-      it.printf(320*1/4/3, 100, id(font_24), "%.0f°", TextAlign::TOP_CENTER, id(outside_temperature2).state);
-      //
-      // Icon weather condition
       if (weather == "sunny") it.image(93, 70, id(imgWeatherSunny));
       else if (weather == "clear-night") it.image(93, 70, id(imgWeatherClearNight));
       else if (weather == "cloudy") it.image(93, 70, id(imgWeatherCloudy));
       else if (weather == "partlycloudy") it.image(93, 70, id(imgWeatherPartlyCloudy));
       else if (weather == "night-partly-cloudy") it.image(93, 70, id(imgWeatherPartlyCloudyNight));
+      else if (weather == "rainy") it.image(93, 70, id(imgWeatherRain));
+      else if (weather == "fog") it.image(93, 70, id(imgWeatherFog));
       else 
       {
-          if (fonDict.count(weather) > 0) {
+          if (fonDict.count(weather) > 0)
             it.printf(320-180/2, 100, id(weather_font), TextAlign::TOP_CENTER, "%s", fonDict[weather]);
-          }
+          else
+            it.printf(320-180/2, 100, id(weather_font), TextAlign::TOP_CENTER, "%s", "?");
       }
-      // Temperature
+      //
+      // Temperature forecast for today lowest - highest
       it.printf(320*2/3+20, 290, id(font_small), TextAlign::TOP_CENTER, "%.0f° - %.0f°", id(weather_forecast_temperature_min).state, id(weather_forecast_temperature_max).state);
       it.printf(320*2/3, 70, id(font_small), TextAlign::TOP_CENTER, "%s", weather.c_str());
+      //
       // Current time
       it.strftime((320 / 2), 380, id(font_bebasneue), Color::WHITE, TextAlign::CENTER, "%Y-%m-%d", id(sntp_time).now());
       it.strftime((320 / 2), 432, id(font_bebasneue), Color::WHITE, TextAlign::CENTER, "%H:%M:%S", id(sntp_time).now());
-
-
